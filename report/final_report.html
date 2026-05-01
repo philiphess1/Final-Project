@@ -1,0 +1,419 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Operational Visibility Gaps in Midwest Commercial Trucking, Final Report</title>
+<style>
+  @page {
+    size: Letter;
+    margin: 0.6in 0.7in 0.7in 0.7in;
+    @bottom-center {
+      content: "Page " counter(page) " of " counter(pages);
+      font-family: Helvetica, Arial, sans-serif;
+      font-size: 8.5pt;
+      color: #777;
+    }
+  }
+  body {
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    color: #1a1a1a;
+    font-size: 10pt;
+    line-height: 1.32;
+  }
+  h1, h2, h3 { color: #0b3954; margin-top: 0.7em; margin-bottom: 0.2em; }
+  h1 { font-size: 18pt; text-align: center; margin-top: 0; }
+  .subtitle { text-align: center; font-size: 11pt; color: #0b3954; margin-bottom: 0.15em; }
+  .authors { text-align: center; color: #555; font-size: 10pt; margin-bottom: 0.1em; }
+  .meta { text-align: center; color: #888; font-size: 9pt; margin-bottom: 0.6em; }
+  hr.title-rule { border: 0; border-top: 1.5px solid #0b3954; margin-bottom: 0.6em; }
+  h2 { font-size: 12.5pt; border-bottom: 1px solid #ccd; padding-bottom: 1px; margin-top: 0.9em; }
+  h3 { font-size: 10.5pt; margin-top: 0.55em; }
+  p { margin: 0.3em 0; text-align: justify; }
+  table {
+    border-collapse: collapse;
+    margin: 0.4em auto;
+    font-size: 9pt;
+    width: 100%;
+  }
+  th, td {
+    border: 1px solid #aab; padding: 3px 7px; text-align: left;
+  }
+  th { background: #e8eef4; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  figure { margin: 0.4em 0; text-align: center; page-break-inside: avoid; }
+  figure img { max-width: 70%; max-height: 2.6in; height: auto; width: auto; }
+  figure.small-fig img { max-width: 55%; max-height: 2.1in; }
+  figure.wide-fig img { max-width: 85%; max-height: 3in; }
+  .two-col { display: flex; gap: 0.7em; align-items: flex-start; page-break-inside: avoid; }
+  .two-col > div { flex: 1; }
+  figcaption { font-size: 8.5pt; color: #555; margin-top: 0.15em; font-style: italic; }
+  .small { font-size: 9pt; color: #444; }
+  ul { margin: 0.2em 0 0.4em 1.3em; padding: 0; }
+  li { margin: 0.08em 0; }
+  .callout {
+    background: #f5f0e6; border-left: 4px solid #c79f5d;
+    padding: 0.4em 0.8em; margin: 0.4em 0; font-size: 9.5pt;
+  }
+  .pagebreak { page-break-before: always; }
+  code { font-family: Menlo, Consolas, monospace; font-size: 9pt; }
+</style>
+</head>
+<body>
+
+<h1>Operational Visibility Gaps in Midwest Commercial Trucking</h1>
+<div class="subtitle">What Fleet Compliance Data Reveals About the ROI of Real-Time Monitoring</div>
+<div class="authors">Philip Hess &nbsp;|&nbsp; Nick Frische &nbsp;|&nbsp; Blake Marcotte</div>
+<div class="meta">Final Report &nbsp;·&nbsp; Spring 2026 &nbsp;·&nbsp; I513 Usable AI</div>
+<hr class="title-rule" />
+
+<h2>1. Introduction</h2>
+<p>
+Commercial trucking moves more than 70% of U.S. freight by value, but operational
+transparency is uneven across the carrier population. Large enterprise carriers run on modern
+telematics, while many small and mid-size operators still rely on paper logs, phone calls, and
+dispatcher memory. The gap shows up at roadside inspection: a large share of inspected
+carriers get cited for vehicle maintenance defects of the kind telematics-based predictive
+maintenance is meant to catch.
+</p>
+<p>
+Indiana and Illinois are a good test case for this. Indiana carries more large-truck traffic
+than any other state, and the Indiana to Chicago corridor is one of the busiest freight
+arteries in the country. The Federal Motor Carrier Safety Administration (FMCSA) publishes
+carrier-level compliance histories (registrations, inspections, and crashes) at
+data.transportation.gov, which gives us a way to study the visibility gap directly.
+</p>
+<p>
+The research question we ask is whether a carrier's measurable characteristics (fleet size,
+carrier type, operation type, and geography) predict whether it will incur a vehicle
+maintenance violation, and if so, which segments of the carrier population are most likely
+to benefit from real-time fleet monitoring.
+</p>
+<p>
+The analysis uses only public data. Our main finding is that simple, observable carrier
+characteristics carry useful predictive signal (cross-validated AUC-ROC of 0.76), and that
+k-means clustering isolates a small segment of high-violation, mid-size, predominantly
+Indiana-based carriers.
+</p>
+
+<h3>Objectives</h3>
+<ul>
+  <li>Describe the distribution of inspection and violation outcomes across IN and IL carriers.</li>
+  <li>Test whether fleet size, carrier type, or operation type correlate with vehicle maintenance violations.</li>
+  <li>Map geographic variation in violation rates across the corridor.</li>
+  <li>Build and compare three classifiers for the violation outcome.</li>
+  <li>Cluster carriers by their full BASIC violation profile to find risk archetypes.</li>
+</ul>
+
+<h2>2. Materials and Methods</h2>
+
+<h3>2.1 Datasets</h3>
+<p>
+Three datasets were pulled from data.transportation.gov via the Socrata REST API. Filtering
+and cleaning are reproducible end to end from the scripts in <code>scripts/</code>.
+</p>
+<table>
+<thead>
+<tr><th>Dataset</th><th>Source ID</th><th class="num">Records</th><th>Role</th></tr>
+</thead>
+<tbody>
+<tr><td>Motor Carrier Census</td><td>kjg3-diqy</td><td class="num">90,128</td><td>Carrier metadata, fleet size, type</td></tr>
+<tr><td>SMS Inspections</td><td>rbkj-cgst</td><td class="num">242,548</td><td>Roadside inspection violations</td></tr>
+<tr><td>Crash Data</td><td>4wxs-vbns</td><td class="num">18,359</td><td>Carrier crash history (supplemental)</td></tr>
+</tbody>
+</table>
+<p class="small">
+Census is filtered to carriers with a registered address in IN or IL and at least one active
+power unit. Inspections and crashes are filtered to events occurring in IN or IL since
+March&nbsp;1,&nbsp;2024 (the FMCSA SMS 24-month window). All three datasets are merged on
+USDOT number.
+</p>
+
+<h3>2.2 Cohort and Outcome</h3>
+<p>
+The modeling cohort is the <strong>21,179</strong> IN/IL-registered carriers (23.5% of all
+registered carriers) that received at least one roadside inspection in the SMS window. The
+binary outcome is whether the carrier incurred at least one Vehicle Maintenance violation,
+which is the BASIC most directly addressable by telematics-based maintenance and ELD products.
+</p>
+
+<h3>2.3 Feature Engineering</h3>
+<ul>
+  <li><strong>Numeric.</strong> log<sub>1+x</sub> of power units, drivers, and inspections; power-units-per-driver; share of inspections occurring in IN; log(1+crashes); any-crash flag.</li>
+  <li><strong>Categorical.</strong> Registered state, carrier type (For-Hire / Private / Other), operation type (Interstate / Intrastate), fleet-size bin.</li>
+  <li><strong>Geography.</strong> Smoothed target encoding of <code>city_state</code>, refit fold-wise inside cross-validation to avoid leakage.</li>
+</ul>
+
+<h3>2.4 Models and Evaluation</h3>
+<p>
+Three classifiers are trained and compared: logistic regression with standardized inputs
+(interpretable baseline), random forest (400 trees), and XGBoost (600 trees, depth 5, learning
+rate 0.05). All three are evaluated on the same stratified 5-fold split, with the city-level
+target encoding refit on each training fold. We report AUC-ROC and AUC-PR. The class imbalance
+is mild (44% positive), so both metrics are meaningful.
+</p>
+
+<h3>2.5 Clustering</h3>
+<p>
+For carriers with at least two inspections (n&nbsp;=&nbsp;12,202) we cluster on standardized
+per-inspection rates of Vehicle Maintenance, Unsafe Driving, Hours of Service, Controlled
+Substances, and Out-of-Service violations. Using rates rather than counts avoids a clustering
+that simply re-discovers fleet-size exposure. We sweep <em>k</em>&nbsp;=&nbsp;2..7 and pick
+<em>k</em> by silhouette score. The preliminary report sketched a low/medium/high-risk
+framing with <em>k</em>=3, but our k=3 fit produced a 59-carrier third cluster that did not
+correspond to a meaningful operational archetype (it was a small outlier group with high
+out-of-service rates), so we adopt <strong>k&nbsp;=&nbsp;2</strong>, which silhouette
+prefers and which separates the data more cleanly into high-risk vs. lower-risk carriers.
+</p>
+
+<h2>3. Results</h2>
+
+<h3>3.1 Overall Violation Landscape</h3>
+<p>
+Across the inspected cohort, <strong>44.5%</strong> of carriers incurred at least one Vehicle
+Maintenance violation in the SMS window, the most common BASIC category by a wide margin. Total
+recorded violations were 44,674 (Vehicle Maintenance), 26,783 (Unsafe Driving), 12,433 (Hours
+of Service), and 282 (Controlled Substances). Indiana-registered carriers fared worse than
+Illinois carriers: <strong>49.5%</strong> of inspected Indiana carriers had a Vehicle
+Maintenance violation versus <strong>41.6%</strong> of inspected Illinois carriers.
+</p>
+<figure>
+  <img src="../figures/fig1_violations_by_basic.png" />
+  <figcaption>Figure 1. Total violations by BASIC category across IN + IL carriers, last 24 months.</figcaption>
+</figure>
+
+<h3>3.2 Fleet Size and Inspection Exposure</h3>
+<p>
+Fleet size is the most visible driver of the raw violation rate. Owner-operators (1 power
+unit) sit at 32.2%, the 51-500 segment reaches 75.3%, and carriers with 500+ units hit 88.3%.
+A lot of this is exposure: larger fleets are inspected far more often, and each inspection is
+another opportunity to be cited (Figure&nbsp;6). The model controls for this directly by
+including <code>log(inspections)</code> as a feature alongside fleet size, so it does not read
+"more inspections" as "worse compliance."
+</p>
+<figure>
+  <img src="../figures/fig2_rate_by_fleet.png" />
+  <figcaption>Figure 2. Vehicle maintenance violation rate by fleet size bin.</figcaption>
+</figure>
+
+<h3>3.3 Carrier Type and Operation Type</h3>
+<p>
+Private carriers (50.1%) post a higher violation rate than for-hire carriers (43.1%). One
+plausible explanation is selection: for-hire carriers face stronger market pressure to keep a
+clean record because shippers and brokers screen safety scores during load matching. Operation
+type goes the same direction: intrastate carriers (51.8%) have a higher rate than interstate
+carriers (43.5%), consistent with interstate operations being subject to a more rigorous
+federal oversight regime.
+</p>
+<figure>
+  <img src="../figures/fig3_carrier_and_op_type.png" />
+  <figcaption>Figure 3. Vehicle maintenance violation rate by carrier type (left) and operation type (right).</figcaption>
+</figure>
+
+<h3>3.4 Geography Within Indiana</h3>
+<p>
+Restricting to Indiana cities with at least 20 inspected carriers, raw violation rates range
+from roughly the state average (~50%) to above 80% in a few mid-size markets (Figure&nbsp;4).
+Some of the spread reflects industry mix (cities with more construction and intrastate
+freight tend to be higher), and some reflects local enforcement intensity.
+</p>
+<figure>
+  <img src="../figures/fig4_top_in_cities.png" />
+  <figcaption>Figure 4. Vehicle maintenance violation rate by Indiana city (cities with 20+ inspected carriers).</figcaption>
+</figure>
+<p>
+Aggregating to the county level gives a cleaner geographic picture. We mapped each carrier
+to its home county via a ZIP-to-county join (pgeocode) and computed an empirical-Bayes
+smoothed violation rate per county, shrinking small-n counties toward the state mean
+(M&nbsp;=&nbsp;30 carriers worth of prior, state mean = 49.5%). The resulting choropleth
+(Figure&nbsp;5) shows the elevated rates concentrated in the northern industrial corridor
+(Elkhart, Lake) and in pockets of central and southwestern Indiana, while the
+Indianapolis-area counties (Marion, Hamilton, Hendricks, Hancock, Johnson) sit notably below
+the state average. This is the geographic feature the model picks up via the smoothed
+city-level encoding.
+</p>
+<figure class="wide-fig">
+  <img src="../figures/fig_in_county_choropleth.png" />
+  <figcaption>Figure 5. Smoothed vehicle maintenance violation rate by Indiana home county. Carriers mapped from ZIP via pgeocode; rates shrunk toward state mean (49.5%) with M=30.</figcaption>
+</figure>
+
+<h3>3.5 Inspection Exposure</h3>
+<p>
+Figure&nbsp;6 confirms the exposure mechanism: average inspections per carrier scale roughly
+log-linearly with fleet size. Including <code>log(inspections)</code> in the model lets it
+separate exposure from compliance quality, rather than conflate the two.
+</p>
+<figure>
+  <img src="../figures/fig6_inspection_exposure.png" />
+  <figcaption>Figure 6. Roadside inspections per carrier vs. fleet size (log-log).</figcaption>
+</figure>
+
+<h3>3.6 Predictive Modeling</h3>
+<p>
+The three classifiers were evaluated on the same stratified 5-fold split. Results are
+summarized below; out-of-fold ROC and PR curves appear in Figures&nbsp;7 and&nbsp;8.
+</p>
+<table>
+<thead>
+<tr><th>Model</th><th class="num">AUC-ROC</th><th class="num">AUC-PR</th><th class="num">Std (ROC)</th></tr>
+</thead>
+<tbody>
+<tr><td><strong>Logistic Regression</strong></td><td class="num"><strong>0.764</strong></td><td class="num"><strong>0.744</strong></td><td class="num">±0.006</td></tr>
+<tr><td>Random Forest</td><td class="num">0.756</td><td class="num">0.734</td><td class="num">±0.004</td></tr>
+<tr><td>XGBoost</td><td class="num">0.742</td><td class="num">0.714</td><td class="num">±0.004</td></tr>
+<tr><td><em>Base rate (positive class)</em></td><td class="num">0.5</td><td class="num">0.444</td><td class="num"></td></tr>
+</tbody>
+</table>
+<p>
+All three models beat the no-information baseline. Logistic regression edges out the
+tree-based models, which is what we'd expect when the dominant signal is roughly log-linear in
+inspection count and fleet size: once those are encoded, there isn't much non-linear
+interaction left for trees to find. The achieved AUC-ROC of 0.76 sits at the top of the
+0.65-0.75 range we projected in the preliminary report. The AUC-PR of 0.744 is 0.30 above the
+0.444 base rate, so a carrier flagged as high-risk by the model is meaningfully more likely
+than a randomly drawn carrier to have a maintenance violation.
+</p>
+<figure>
+  <img src="../figures/roc_curves.png" />
+  <figcaption>Figure 7. ROC curves on out-of-fold predictions across the three models.</figcaption>
+</figure>
+<figure>
+  <img src="../figures/pr_curves.png" />
+  <figcaption>Figure 8. Precision-recall curves; dashed line is the 44.4% positive base rate.</figcaption>
+</figure>
+
+<h3>3.7 Feature Importance</h3>
+<p>
+The dominant feature in the XGBoost model is <code>log(inspections)</code> by a wide margin
+(gain ≈ 20.1, vs. 7.1 for the next feature). The smoothed city-level encoding is second,
+followed by operation type, carrier type, and the share of a carrier's inspections that occur
+in Indiana. Crash history adds some marginal signal but is dominated by the structural and
+geographic features.
+</p>
+<figure>
+  <img src="../figures/xgb_importance.png" />
+  <figcaption>Figure 9. XGBoost feature importance (top 15, gain).</figcaption>
+</figure>
+
+<h3>3.8 Clustering: Two Risk Segments</h3>
+<p>
+At <em>k</em>=2 the algorithm splits the inspected cohort into a large low-risk segment
+and a small high-risk segment. The cluster profile is summarized below.
+</p>
+<table>
+<thead>
+<tr><th>Cluster</th><th class="num">n</th><th class="num">VH&nbsp;Maint /&nbsp;Insp</th><th class="num">Unsafe /&nbsp;Insp</th><th class="num">OOS&nbsp;rate</th><th class="num">Median Fleet</th><th class="num">% Private</th><th class="num">% Intrastate</th><th class="num">% IN</th></tr>
+</thead>
+<tbody>
+<tr><td><strong>Low-Risk</strong></td><td class="num">11,051</td><td class="num">0.33</td><td class="num">0.27</td><td class="num">0.13</td><td class="num">7</td><td class="num">14%</td><td class="num">7%</td><td class="num">31%</td></tr>
+<tr><td><strong>High-Risk</strong></td><td class="num">1,151</td><td class="num">2.69</td><td class="num">0.18</td><td class="num">1.26</td><td class="num">4</td><td class="num">27%</td><td class="num">19%</td><td class="num">51%</td></tr>
+</tbody>
+</table>
+<p>
+The High-Risk cluster (1,151 carriers, about 9% of the eligible cohort) has roughly
+<strong>8x</strong> the Low-Risk segment's per-inspection vehicle maintenance violation
+rate, near-100% any-violation rates, and a 10x higher out-of-service rate. It is also
+over-indexed on private (27% vs. 14%) and intrastate (19% vs. 7%) carriers, and 51% of these
+carriers are based in Indiana versus 31% of the low-risk segment. This matches the hypothesis
+sketched in the preliminary report: a distinct high-risk archetype of mid-size private
+intrastate carriers concentrated in Indiana.
+</p>
+<figure>
+  <img src="../figures/cluster_profile.png" />
+  <figcaption>Figure 10. Per-inspection violation rates across BASIC categories by cluster.</figcaption>
+</figure>
+
+<h2>4. Discussion</h2>
+
+<h3>4.1 Feature importance and the role of exposure</h3>
+<p>
+The single most predictive feature is inspection count itself: carriers that get inspected
+more get cited more. Once we condition on inspection exposure, the next most informative
+signals are geographic (where the carrier is based and where its trucks are inspected) and
+structural (private vs. for-hire, intrastate vs. interstate). Fleet size matters only after
+that. The qualitative characteristics of an operation appear to matter more than its raw
+size once inspection exposure is held constant.
+</p>
+
+<h3>4.2 Model comparison</h3>
+<p>
+Logistic regression edged out both random forest and XGBoost on this problem. The dominant
+signals are monotone and roughly log-linear, and the categorical features have small
+cardinality, which is the regime in which a linear classifier is hard to beat. Tree-based
+models gain ground when feature interactions and non-linearity are strong; here those
+effects are modest, so the additional model capacity costs more variance than it saves bias.
+The practical implication is that a deployable scoring model for this problem can stay
+simple and fully interpretable.
+</p>
+
+<h3>4.3 Limitations</h3>
+<p>
+<strong>Inspection selection bias is the biggest one.</strong> 76.5% of registered IN/IL
+carriers (≈68,949 of 90,128) had no roadside inspections in the SMS window. The carriers that
+do get inspected are not representative of the full registered population; they skew toward
+larger and more active fleets. The model's outputs therefore answer "would this carrier, if
+inspected, get a maintenance citation?" rather than "is this carrier unsafe in real life?" A
+two-stage model (predict inspection probability first, then violation conditional on
+inspection) would address this. We sketched the architecture but did not have time to run a
+clean evaluation, and we flag it as the most important next step.
+</p>
+<p>
+<strong>Address vs. operating geography.</strong> A carrier registered in Chicago can
+accumulate most of its violations on Indiana roads. The model uses both the registered state
+and the share of a carrier's inspections that occur in Indiana, which partially compensates,
+but a true operating-geography signal would require route-level data we do not have.
+</p>
+<p>
+<strong>BASIC scope.</strong> The Crash Indicator and Hazardous Materials BASICs are not
+publicly disclosed for property carriers under the FAST Act of 2015. Our outcome is therefore
+the violation count, not the published BASIC percentile, and our crash features are raw counts
+rather than the FMCSA-published score.
+</p>
+
+<h3>4.4 Practical Implications</h3>
+<p>
+The High-Risk cluster (≈1,151 IN/IL carriers, mostly private, mostly intrastate, median fleet
+size 4) accumulates roughly 8x the low-risk carrier's vehicle maintenance violation rate per
+inspection. These are the carriers with the most to gain from real-time fleet monitoring,
+which is currently sold to mid-market trucking at roughly $30 to $80 per vehicle per month
+(industry trade press; e.g., Geotab, Samsara, Motive list pricing for fleets of 5-50
+vehicles). An avoided out-of-service event removes a day of lost revenue plus the
+downstream effect on the carrier's published BASIC scores. The analysis gives a concrete,
+data-backed profile of where the operational payoff from telematics is concentrated in the
+IN/IL freight market.
+</p>
+
+<h2>5. Conclusion and Future Work</h2>
+<p>
+Public FMCSA compliance data carries enough signal to predict vehicle maintenance violations
+among inspected Indiana and Illinois carriers at AUC-ROC ≈ 0.76, and unsupervised clustering
+isolates a 1,151-carrier high-risk segment that is over-indexed on private intrastate
+carriers in Indiana. Two further extensions would strengthen this work:
+</p>
+<ul>
+  <li><strong>Two-stage selection model</strong> to correct for inspection bias, treating the 76.5% non-inspected population explicitly rather than excluding it. We sketched the architecture (a propensity model for inspection probability, then a violation model conditional on inspection) but did not have time to validate it cleanly.</li>
+  <li><strong>Calibration analysis</strong> on the logistic regression scores to convert them into a usable absolute risk prior for outreach prioritization.</li>
+</ul>
+
+<h2>6. Reproducibility</h2>
+<p class="small">
+Repository:
+<a href="https://github.com/philiphess1/Final-Project">https://github.com/philiphess1/Final-Project</a>.
+All code is in <code>scripts/</code> and runs end to end via
+<code>scripts/01_download_data.py</code> (Socrata pull),
+<code>02_build_analysis_table.py</code> (merge),
+<code>03_features_and_models.py</code> (modeling),
+<code>04_clustering.py</code> (k-means),
+<code>05_eda_figures.py</code> (EDA figures),
+<code>07_choropleth.py</code> (county map), and
+<code>06_build_report.py</code> (HTML to PDF render).
+A <code>requirements.txt</code> and README accompany the repository.
+</p>
+<p class="small">
+<strong>Data source.</strong> U.S. Department of Transportation open data portal,
+data.transportation.gov.
+<strong>Datasets.</strong> kjg3-diqy (Motor Carrier Census), rbkj-cgst (SMS Inspections),
+4wxs-vbns (Crash Data).
+</p>
+
+</body>
+</html>

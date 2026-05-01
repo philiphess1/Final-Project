@@ -1,0 +1,17 @@
+# raw + processed data is large and reproducible from scripts/01_download_data.py
+data/
+
+# python
+__pycache__/
+*.pyc
+*.pyo
+
+# logs
+*.log
+
+# macOS
+.DS_Store
+
+# editor
+.vscode/
+.idea/
